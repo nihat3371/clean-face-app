@@ -1,16 +1,9 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { PrismaClient } from "@prisma/client";
 import { analyzeSkinImage } from "@/app/utils/gemini";
-import { db } from "@/app/utils/firebase";
-import {
-  collection,
-  addDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  getDocs,
-} from "firebase/firestore";
+
+const prisma = new PrismaClient();
 
 export async function POST(req) {
   try {
@@ -28,13 +21,14 @@ export async function POST(req) {
     // Gemini API ile analiz yap
     const analysisResult = await analyzeSkinImage(imageData);
 
-    // Analizi Firestore'a kaydet
-    const analysisRef = await addDoc(collection(db, "analyses"), {
-      userId: session.user.id,
-      imageUrl: imageData,
-      skinIssues: analysisResult.skinIssues,
-      recommendations: analysisResult.recommendations,
-      createdAt: new Date().toISOString(),
+    // Analizi veritabanına kaydet
+    const analysis = await prisma.analysis.create({
+      data: {
+        userId: session.user.id,
+        imageUrl: imageData, // Base64 formatında saklıyoruz
+        skinIssues: JSON.stringify(analysisResult.skinIssues),
+        recommendations: JSON.stringify(analysisResult.recommendations),
+      },
     });
 
     return NextResponse.json(analysisResult);
@@ -59,20 +53,24 @@ export async function GET(req) {
     }
 
     // Kullanıcının analizlerini getir
-    const analysesQuery = query(
-      collection(db, "analyses"),
-      where("userId", "==", session.user.id),
-      orderBy("createdAt", "desc"),
-      limit(10)
-    );
+    const analyses = await prisma.analysis.findMany({
+      where: {
+        userId: session.user.id,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 10, // Son 10 analizi getir
+    });
 
-    const querySnapshot = await getDocs(analysesQuery);
-    const analyses = querySnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
+    // JSON string'leri parse et
+    const formattedAnalyses = analyses.map((analysis) => ({
+      ...analysis,
+      skinIssues: JSON.parse(analysis.skinIssues),
+      recommendations: JSON.parse(analysis.recommendations),
     }));
 
-    return NextResponse.json(analyses);
+    return NextResponse.json(formattedAnalyses);
   } catch (error) {
     console.error("Analiz getirme hatası:", error);
     return NextResponse.json(
