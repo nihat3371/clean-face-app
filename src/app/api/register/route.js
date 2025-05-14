@@ -1,35 +1,34 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
-
-const prisma = new PrismaClient();
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/app/utils/firebase";
 
 export async function POST(req) {
   try {
     const { name, email, password } = await req.json();
 
     // Email kontrolü
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
+    const userDoc = await getDoc(doc(db, "users", email));
+    if (userDoc.exists()) {
       return NextResponse.json(
         { error: "Bu email adresi zaten kullanılıyor" },
         { status: 400 }
       );
     }
 
-    // Şifreyi hashle
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Firebase Authentication ile kullanıcı oluştur
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+    const user = userCredential.user;
 
-    // Kullanıcıyı oluştur
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-      },
+    // Kullanıcı bilgilerini Firestore'a kaydet
+    await setDoc(doc(db, "users", user.uid), {
+      name,
+      email,
+      createdAt: new Date().toISOString(),
     });
 
     return NextResponse.json(
