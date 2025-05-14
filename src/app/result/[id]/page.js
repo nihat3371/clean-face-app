@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -12,7 +12,6 @@ export default function ResultPage({ params }) {
   const { data: session } = useSession();
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
-  const resolvedParams = use(params);
 
   useEffect(() => {
     const loadAnalysis = () => {
@@ -27,7 +26,7 @@ export default function ResultPage({ params }) {
 
         const analyses = JSON.parse(savedAnalyses);
         const currentAnalysis = analyses.find(
-          (a) => a.id.toString() === resolvedParams.id
+          (a) => a.id.toString() === params.id
         );
 
         if (!currentAnalysis) {
@@ -45,7 +44,7 @@ export default function ResultPage({ params }) {
     };
 
     loadAnalysis();
-  }, [resolvedParams.id, session, router]);
+  }, [params.id, session, router]);
 
   if (loading) {
     return (
